@@ -11,7 +11,7 @@ RUN pip install --upgrade pip --no-cache-dir \
 # Copier le reste de l app
 COPY app/ .
 
-# Définir le port par défaut (pour debug local)
+# Port par defaut (pour debug local)
 EXPOSE 8000
 
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

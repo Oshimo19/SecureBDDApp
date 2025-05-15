@@ -2,10 +2,9 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Charger .env
+# Chargement du .env
 load_dotenv()
 
-# Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Securite
@@ -16,7 +15,7 @@ if not SECRET_KEY:
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1").split(",")
 
-# Apps Django
+# Applications installees
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -24,6 +23,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'accounts',
 ]
 
 # Middleware
@@ -35,6 +35,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'accounts.middleware.JWTMiddleware',
 ]
 
 ROOT_URLCONF = 'secureBDDApp.urls'
@@ -77,6 +78,11 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
+# Hachage des mots de passe (Argon2id)
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+]
+
 # Localisation
 LANGUAGE_CODE = os.getenv("DJANGO_LANGUAGE_CODE", "fr-fr")
 TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "UTC")
@@ -86,10 +92,9 @@ USE_TZ = True
 # Fichiers statiques
 STATIC_URL = 'static/'
 
-# Champ ID par defaut
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Renforcements HTTPS & securite cookies
+# Securite renforcee en production
 """
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
@@ -103,4 +108,3 @@ if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
 """
-
