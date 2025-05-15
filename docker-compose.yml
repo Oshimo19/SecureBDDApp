@@ -1,18 +1,45 @@
 services:
-  db:
-    image: postgres:16.9
-    container_name: securebdd-db
+  pgsdb:
+    image: postgres:${POSTGRES_VERSION}
+    container_name: ${POSTGRES_CONTAINER_NAME}
     restart: always
-    env_file:
-      - .env
     environment:
       POSTGRES_DB: "${POSTGRES_DB}"
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     expose:
-      - "${POSTGRES_PORT}"
+      - "5432"  # Port expose en interne dans Docker 
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - netSec
+
+  django:
+    build: ./backend
+    container_name: ${DJANGO_CONTAINER_NAME}
+    depends_on:
+      - pgsdb
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_DEBUG: ${DJANGO_DEBUG}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+    ports:
+      - "${DJANGO_PORT}:8000"
+    volumes:
+      - ./backend/app:/app
+    working_dir: /app
+    command: bash -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    networks:
+      - netSec
+
+networks:
+  netSec:
+    driver: bridge
