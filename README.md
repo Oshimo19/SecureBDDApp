@@ -120,7 +120,7 @@ SecureBDDApp
 
 ---
 
-## 📸 Schémas dans le dossier `docs/` (branche `dev`)
+## 📸 Schémas dans le dossier `docs/`
 
 - MCD (Modèle Conceptuel de Données)
 - Cas d'utilisation (UML)
