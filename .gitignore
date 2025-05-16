@@ -1,5 +1,8 @@
 .env
+.vscode
 __pycache__
+*.pyc
 backend/app/initUser.py
 backend/app/initAdmin.py
 backend/app/secureBDDApp/settings2.py
+databases/
