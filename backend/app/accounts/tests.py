@@ -139,6 +139,6 @@ class AccountsTestCase(TestCase):
         self.assertIn("Nom ou prenom invalide", response.json().get("error", ""))
 
     def test_invalid_route(self):
-        response = self.client.get("/api/route/inexistante")
+        response = self.client.get("/")
         self.assertEqual(response.status_code, 404)
         self.assertIn("Acces interdit", response.json().get("error", ""))
