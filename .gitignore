@@ -1,3 +1,4 @@
 .env
 __pycache__
-initUser.py
+backend/app/initUser.py
+backend/app/secureBDDApp/settings2.py

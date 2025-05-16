@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Chargement du fichier .env
+# Chargement des variables d environnement (.env)
 load_dotenv()
 
 # Repertoire racine du projet
@@ -13,29 +13,35 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
     raise ValueError("[-] DJANGO_SECRET_KEY manquant dans .env")
 
-# Mode debug et hotes autorises
+# Mode debug et liste des hotes autorises
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1").split(",")
 
-# Applications installees
+# Applications installees (API uniquement)
 INSTALLED_APPS = [
-    "accounts",
+    "accounts", # Appli principale
 ]
 
-# Middleware utilise (minimise pour API)
+# Middleware
 MIDDLEWARE = [
-    "django.middleware.security.SecurityMiddleware",
-    "django.middleware.common.CommonMiddleware",
-    "accounts.middleware.JWTMiddleware",
+    "django.middleware.security.SecurityMiddleware",             # En-tetes de securite HTTP
+    "django.middleware.common.CommonMiddleware",                 # Reponses compatibles HTTP standards
+    "accounts.middleware.JWTMiddleware",                         # Authentification JWT
+    "accounts.middleware.BruteForceProtectionMiddleware",        # Protection brute force
+    "accounts.middleware.SecureIDORMiddleware",                  # Contre les acces illegitimes
+    "accounts.middleware.ErrorHandlingMiddleware",               # Erreurs unifiees
 ]
 
-# Pas de templates utilises
+# Aucun moteur de templates necessaire (API uniquement)
 TEMPLATES = []
 
-# Pas de session, pas d admin
+# Pas d admin ni de sessions classiques
 AUTH_PASSWORD_VALIDATORS = []
 
-# Hachage securise avec Argon2id (active via make_password + PASSWORD_HASHERS)
+# Routing principal
+ROOT_URLCONF = "secureBDDApp.urls"
+
+# Algo de hachage securise (Argon2id)
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.Argon2PasswordHasher",
 ]
@@ -52,17 +58,17 @@ DATABASES = {
     }
 }
 
-# Localisation
+# Localisation et fuseau horaire
 LANGUAGE_CODE = os.getenv("DJANGO_LANGUAGE_CODE", "fr-fr")
 TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "UTC")
 USE_I18N = False
 USE_TZ = True
 
-# Pas de fichiers statiques ni d interface
+# Pas de fichiers statiques exposes
 STATIC_URL = None
 
-# Champ ID par defaut
+# ID auto par defaut pour les tables
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Pas d admin, pas de WSGI si tu ne déploies pas avec gunicorn
+# Application WSGI (necessaire meme si gunicorn n est pas encore configure)
 WSGI_APPLICATION = "secureBDDApp.wsgi.application"

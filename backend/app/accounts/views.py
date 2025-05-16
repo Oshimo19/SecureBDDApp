@@ -4,18 +4,19 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
+from accounts.models import User, DeletedUser
 
 import json
 import base64
 import hmac
 import hashlib
 import time
+import re
 
-from accounts.models import User, DeletedUser
 
-# --- Fonctions JWT ---
+# JWT
 
-def generate_jwt(payload: dict, exp: int = 3600) -> str:
+def generate_jwt(payload, exp=3600):
     header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode()).decode().rstrip("=")
     payload["exp"] = int(time.time()) + exp
     payload_encoded = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
@@ -24,7 +25,7 @@ def generate_jwt(payload: dict, exp: int = 3600) -> str:
     signature_encoded = base64.urlsafe_b64encode(signature).decode().rstrip("=")
     return f"{to_sign}.{signature_encoded}"
 
-def decode_jwt(token: str) -> dict:
+def decode_jwt(token):
     try:
         header_b64, payload_b64, signature = token.split(".")
         expected_sig = hmac.new(settings.SECRET_KEY.encode(), f"{header_b64}.{payload_b64}".encode(), hashlib.sha256).digest()
@@ -39,13 +40,32 @@ def decode_jwt(token: str) -> dict:
         return None
 
 
-# --- Vues ---
+# Validation Regex de email et nom, prenom
+
+def is_valid_email(email):
+    return bool(re.fullmatch(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$", email))
+
+def is_valid_name(name):
+    return bool(re.fullmatch(r"^[A-Za-z\s\-']{1,100}$", name))
+
+# Politique conforme ANSSI : 12+ caractères, maj, min, chiffre, caractere spécial
+def is_strong_password(password):
+    if not 12 <= len(password) <= 64:
+        return False
+    if not re.search(r"[a-z]", password): return False
+    if not re.search(r"[A-Z]", password): return False
+    if not re.search(r"\d", password): return False
+    if not re.search(r"[^\w\s]", password): return False  # caracteres speciaux
+    return True
+
+
+# Vues REST securisees
 
 @method_decorator(csrf_exempt, name="dispatch")
 class RegisterView(View):
     def post(self, request):
         try:
-            data = json.loads(request.body)
+            data = getattr(request, "cleaned_data", None) or json.loads(request.body)
             email = data.get("email")
             password = data.get("password")
             firstName = data.get("firstName", "")
@@ -53,8 +73,13 @@ class RegisterView(View):
             role = data.get("role", "user")
 
             if not email or not password:
-                return JsonResponse({"error": "Email et mot de passe requis"}, status=400)
-
+                return JsonResponse({"error": "Champs requis manquants"}, status=400)
+            if not is_valid_email(email):
+                return JsonResponse({"error": "Email invalide"}, status=400)
+            if not is_strong_password(password):
+                return JsonResponse({"error": "Mot de passe invalide"}, status=400)
+            if not is_valid_name(firstName) or not is_valid_name(lastName):
+                return JsonResponse({"error": "Nom ou prenom invalide"}, status=400)
             if User.objects.filter(email=email).exists():
                 return JsonResponse({"error": "Email deja utilise"}, status=400)
 
@@ -63,47 +88,45 @@ class RegisterView(View):
                 password=make_password(password),
                 firstName=firstName,
                 lastName=lastName,
-                role=role,
+                role=role
             )
-
             return JsonResponse({"message": "Inscription reussie", "user_id": user.id})
         except Exception:
             return JsonResponse({"error": "Erreur serveur"}, status=500)
+
 
 @method_decorator(csrf_exempt, name="dispatch")
 class LoginView(View):
     def post(self, request):
         try:
-            data = json.loads(request.body)
+            data = getattr(request, "cleaned_data", None) or json.loads(request.body)
             email = data.get("email")
             password = data.get("password")
 
             if not email or not password:
-                return JsonResponse({"error": "Email et mot de passe requis"}, status=400)
+                return JsonResponse({"error": "Champs requis manquants"}, status=400)
 
-            user = User.objects.get(email=email)
-            if not check_password(password, user.password):
-                return JsonResponse({"error": "Mot de passe incorrect"}, status=401)
+            user = User.objects.filter(email=email).first()
+            if not user or not check_password(password, user.password):
+                return JsonResponse({"error": "Identifiants invalides"}, status=401)
 
             jwt_token = generate_jwt({"user_id": user.id, "role": user.role})
             return JsonResponse({"message": "Connexion reussie", "token": jwt_token})
-
-        except User.DoesNotExist:
-            return JsonResponse({"error": "Utilisateur introuvable"}, status=404)
         except Exception:
             return JsonResponse({"error": "Erreur serveur"}, status=500)
+
 
 @method_decorator(csrf_exempt, name="dispatch")
 class LogoutView(View):
     def post(self, request):
         return JsonResponse({"message": "Deconnexion reussie. Supprimez le token localement."})
 
+
 class UserProfileView(View):
     def get(self, request):
-        if not request.user:
-            return JsonResponse({"error": "Non authentifie"}, status=401)
-
-        user = request.user
+        user = getattr(request, "user", None)
+        if not user:
+            return JsonResponse({"error": "Acces non autorise"}, status=401)
         return JsonResponse({
             "email": user.email,
             "firstName": user.firstName,
@@ -112,28 +135,32 @@ class UserProfileView(View):
             "createdAt": user.createdAt,
         })
 
+
 class AdminListUsersView(View):
     def get(self, request):
-        if not request.user or request.user.role != "admin":
+        user = getattr(request, "user", None)
+        if not user or user.role != "admin":
             return JsonResponse({"error": "Acces refuse"}, status=403)
-
         users = User.objects.all().values("id", "email", "firstName", "lastName", "role", "createdAt")
         return JsonResponse({"users": list(users)})
+
 
 @method_decorator(csrf_exempt, name="dispatch")
 class AdminDeleteUserView(View):
     def post(self, request, user_id):
-        if not request.user or request.user.role != "admin":
+        user = getattr(request, "user", None)
+        if not user or user.role != "admin":
             return JsonResponse({"error": "Acces refuse"}, status=403)
-
         try:
-            user = User.objects.get(id=user_id)
-            DeletedUser.objects.create(email=user.email, deletedBy=request.user)
-            user.delete()
+            target_user = User.objects.get(id=user_id)
+            DeletedUser.objects.create(email=target_user.email, deletedBy=user)
+            target_user.delete()
             return JsonResponse({"message": "Utilisateur supprime"})
         except User.DoesNotExist:
-            return JsonResponse({"error": "Utilisateur introuvable"}, status=404)
+            return JsonResponse({"error": "Requete invalide"}, status=400)
+
 
 class HomeView(View):
     def get(self, request):
         return JsonResponse({"message": "Bienvenue sur la page d accueil"})
+
